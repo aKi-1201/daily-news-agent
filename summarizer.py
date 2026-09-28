@@ -1,5 +1,5 @@
 """
-用 Gemini API 把蒐集到的原始資料整理成早報文字，並拆成 2~3 個獨立段落
+用 Gemini API 把蒐集到的原始資料整理成早報文字，並拆成 1~3 個獨立段落
 （用 SECTION_DELIMITER 分隔），方便 main.py 拆開後用多則 LINE 訊息推播。
 刻意用最原始的 REST 呼叫方式（requests 直打 API），而不是 google-genai SDK，
 理由：SDK 套件名稱/介面這幾年變動頻繁，REST endpoint 相對穩定，個人專案維護成本較低。
@@ -14,9 +14,10 @@ log = logging.getLogger("daily-news-agent.summarizer")
 GEMINI_ENDPOINT = (
     "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 )
-REQUEST_TIMEOUT = 90  # 秒；Gemini 若開著思考模式偶爾會回應較慢，留寬一點
+REQUEST_TIMEOUT = 180  # 秒；thinkingLevel=high 思考時間較長，留寬一點
 MAX_RETRIES = 5
-RETRY_BACKOFF_SECONDS = 5
+RETRY_BACKOFF_SECONDS = 10  # 每次重試等待時間加倍：10, 20, 40, 80 秒
+RETRYABLE_STATUS = {429, 500, 502, 503, 504}  # 其他 4xx（金鑰錯、模型名稱錯）重試也沒用
 
 SECTION_DELIMITER = "===SECTION==="
 
@@ -49,43 +50,52 @@ SYSTEM_PROMPT = f"""你是一位財經新聞編輯，請根據使用者提供的
 6. 使用台灣人習慣的用語與繁體中文。"""
 
 
+def _post_with_retry(url: str, api_key: str, payload: dict) -> dict:
+    """遇到 429/5xx/網路錯誤時以指數退避重試；金鑰放在 header，避免錯誤訊息把 key 寫進 log。"""
+    for attempt in range(1, MAX_RETRIES + 1):
+        try:
+            resp = requests.post(url, headers={"x-goog-api-key": api_key},
+                                 json=payload, timeout=REQUEST_TIMEOUT)
+            if resp.ok:
+                return resp.json()
+            if resp.status_code not in RETRYABLE_STATUS:
+                raise RuntimeError(f"Gemini API 錯誤 HTTP {resp.status_code}：{resp.text[:500]}")
+            error = f"HTTP {resp.status_code}"
+        except (requests.ConnectionError, requests.Timeout) as e:
+            error = repr(e)
+        if attempt == MAX_RETRIES:
+            raise RuntimeError(f"Gemini API 呼叫連續失敗 {MAX_RETRIES} 次，最後錯誤：{error}")
+        wait = RETRY_BACKOFF_SECONDS * 2 ** (attempt - 1)
+        log.warning("Gemini API 第 %d 次呼叫失敗（%s），%d 秒後重試", attempt, error, wait)
+        time.sleep(wait)
+
+
 def summarize_with_gemini(api_key: str, model: str, raw_data: str) -> list[str]:
-    """呼叫 Gemini 並依 SECTION_DELIMITER 拆成多段文字，回傳 list（長度為 2 或 3）。"""
+    """呼叫 Gemini 並依 SECTION_DELIMITER 拆成多段文字，回傳 list。"""
     if not api_key:
         raise ValueError("尚未設定 GEMINI_API_KEY")
 
-    url = GEMINI_ENDPOINT.format(model=model)
     payload = {
         "system_instruction": {"parts": [{"text": SYSTEM_PROMPT}]},
         "contents": [{"role": "user", "parts": [{"text": raw_data}]}],
-        # 不指定 thinkingConfig，沿用模型預設的思考模式行為。
-        # 注意：Gemini 2.5 系列的思考控制參數是 thinkingConfig.thinkingBudget，
-        # Gemini 3 系列改用 thinkingConfig.thinkingLevel，兩者格式不同、不能混用，
-        # 如果之後想手動調整思考程度，要先確認目前 GEMINI_MODEL 是哪個系列再對應設定。
-        "generationConfig": {"temperature": 0.3},
+        # 僅適用 Gemini 3 系列（2.5 系列要改用 thinkingBudget）。
+        # temperature 刻意不設定：官方強烈建議 Gemini 3 維持預設 1.0，調低可能導致重複迴圈或品質下降。
+        # thinkingLevel 預設為 medium，這裡拉到 high 以換取更好的新聞篩選與歸納品質。
+        # 思考 token 也計入 maxOutputTokens，直接給到模型上限避免被截斷。
+        "generationConfig": {
+            "thinkingConfig": {"thinkingLevel": "high"},
+            "maxOutputTokens": 65536,
+        },
     }
-
-    last_error = None
-    for attempt in range(1, MAX_RETRIES + 1):
-        try:
-            resp = requests.post(url, params={"key": api_key}, json=payload, timeout=REQUEST_TIMEOUT)
-            resp.raise_for_status()
-            data = resp.json()
-            break
-        except requests.exceptions.RequestException as e:
-            last_error = e
-            log.warning("Gemini API 第 %d 次呼叫失敗（%s），%s",
-                        attempt, e, "準備重試" if attempt < MAX_RETRIES else "已達重試上限")
-            if attempt < MAX_RETRIES:
-                time.sleep(RETRY_BACKOFF_SECONDS)
-    else:
-        raise RuntimeError(f"Gemini API 呼叫連續失敗 {MAX_RETRIES} 次: {last_error}") from last_error
+    data = _post_with_retry(GEMINI_ENDPOINT.format(model=model), api_key, payload)
 
     try:
-        parts = data["candidates"][0]["content"]["parts"]
-        full_text = "".join(p.get("text", "") for p in parts).strip()
+        candidate = data["candidates"][0]
+        full_text = "".join(p.get("text", "") for p in candidate["content"]["parts"]).strip()
     except (KeyError, IndexError) as e:
         raise RuntimeError(f"Gemini 回應格式異常，無法解析: {data}") from e
+    if candidate.get("finishReason") != "STOP":
+        log.warning("Gemini 回應非正常結束（finishReason=%s），內容可能不完整", candidate.get("finishReason"))
 
     sections = [s.strip() for s in full_text.split(SECTION_DELIMITER)]
     sections = [s for s in sections if s]  # 過濾空段落

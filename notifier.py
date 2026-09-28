@@ -15,23 +15,15 @@ def _truncate(text: str) -> str:
     return text
 
 
-def push_line_text(channel_access_token: str, user_id: str, text: str) -> None:
-    """推播單一則文字訊息。"""
-    push_line_texts(channel_access_token, user_id, [text])
-
-
 def push_line_texts(channel_access_token: str, user_id: str, texts: list[str]) -> None:
     """
     一次推播多則文字訊息（會顯示成多個分開的訊息泡泡）。
-    LINE push API 一次最多接受 5 則 messages，超過的部分會被截掉並記錄警告。
+    LINE push API 一次最多接受 5 則 messages，超過的部分直接捨棄，避免整次推播被拒。
     """
     if not channel_access_token or not user_id:
         raise ValueError("尚未設定 LINE_CHANNEL_ACCESS_TOKEN 或 LINE_USER_ID")
     if not texts:
         raise ValueError("texts 不能為空")
-
-    if len(texts) > LINE_MAX_MESSAGES_PER_PUSH:
-        texts = texts[:LINE_MAX_MESSAGES_PER_PUSH]
 
     headers = {
         "Content-Type": "application/json",
@@ -39,7 +31,7 @@ def push_line_texts(channel_access_token: str, user_id: str, texts: list[str]) -
     }
     payload = {
         "to": user_id,
-        "messages": [{"type": "text", "text": _truncate(t)} for t in texts],
+        "messages": [{"type": "text", "text": _truncate(t)} for t in texts[:LINE_MAX_MESSAGES_PER_PUSH]],
     }
     resp = requests.post(LINE_PUSH_URL, headers=headers, json=payload, timeout=15)
     if resp.status_code != 200:

@@ -4,15 +4,13 @@
 """
 import os
 
-try:
-    from dotenv import load_dotenv
-    load_dotenv()  # 自動讀取專案資料夾下的 .env，找不到檔案也不會報錯
-except ImportError:
-    pass  # 沒裝 python-dotenv 也沒關係，退回用系統環境變數
+from dotenv import load_dotenv
+
+load_dotenv()  # 讀取專案資料夾下的 .env，找不到檔案也不會報錯
 
 # ============ API 金鑰 / Token（從環境變數讀取） ============
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.8-flash")  # 需為 Gemini 3 系列，見 summarizer.py
 
 LINE_CHANNEL_ACCESS_TOKEN = os.environ.get("LINE_CHANNEL_ACCESS_TOKEN", "")
 LINE_USER_ID = os.environ.get("LINE_USER_ID", "")  # 你自己的 LINE userId（推播目標）
@@ -35,17 +33,15 @@ RSS_FEEDS = {
 }
 HEADLINES_PER_SOURCE = 10  # 每個新聞來源取幾則標題餵給 LLM（8 來源 x 10 則，讓編輯室摘要有足夠素材）
 
-# ============ 美股觀察指數（同時設定 Stooq 與 Yahoo 代碼，其中一個抓不到就自動改用另一個） ============
+# ============ 美股觀察指數（顯示名稱 -> Yahoo Finance 代碼） ============
 US_INDICES = {
-    "S&P 500": {"stooq": "^spx", "yahoo": "^GSPC"},
-    "Nasdaq": {"stooq": "^ndq", "yahoo": "^IXIC"},
-    "道瓊工業指數": {"stooq": "^dji", "yahoo": "^DJI"},
-    "費城半導體指數": {"stooq": "^sox", "yahoo": "^SOX"},  # Yahoo代碼已確認；Stooq代碼若失效會自動改用Yahoo
+    "S&P 500": "^GSPC",
+    "Nasdaq": "^IXIC",
+    "道瓊工業指數": "^DJI",
+    "費城半導體指數": "^SOX",
 }
 
-# ============ 美股休市判斷 ============
-# 已改用 pandas_market_calendars 套件自動判斷（見 sources.py 的 is_us_market_likely_closed），
-# 內建 NYSE 官方假日規則且會自動處理浮動假日，不需要在這裡手動維護清單了。
+# ============ FRED 經濟數據 ============
 # 完整 release 列表: https://fred.stlouisfed.org/releases
 # 序列代碼可在該序列頁面網址找到，例如 https://fred.stlouisfed.org/series/CPIAUCSL
 FRED_RELEASES = {
