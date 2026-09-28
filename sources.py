@@ -194,6 +194,6 @@ def fetch_fred_todays_releases(api_key: str, releases: dict) -> str:
                 f"（較上期 {change:+.2f}，{pct:+.2f}%）"
             )
         except Exception as e:
-            blocks.append(f"- {name}：查詢失敗（{e}）")
+            log.warning("FRED %s 查詢失敗：%s", name, e)
 
     return "\n".join(blocks)

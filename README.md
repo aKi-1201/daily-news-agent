@@ -41,7 +41,7 @@ pip install -r requirements.txt
 ## 3. 設定環境變數
 
 ```bash
-cp .env.example .env
+cp env.example .env
 nano .env   # 填入上面拿到的金鑰
 ```
 
@@ -56,7 +56,7 @@ python3 main.py
 
 ## 4. 排程（cron）
 
-美股資料建議在**台灣時間清晨**抓（此時美股已收盤、數據穩定），例如每天早上 7:00：
+美股資料建議在**台灣時間清晨**抓（此時美股已收盤、數據穩定），目前排程為每天早上 8:00：
 
 ```bash
 crontab -e
@@ -65,7 +65,7 @@ crontab -e
 加入這行（請把路徑換成你實際的專案路徑）：
 
 ```cron
-0 7 * * * cd /home/ubuntu/daily-news-agent && /home/ubuntu/daily-news-agent/venv/bin/python3 -c "
+0 8 * * * cd /home/ubuntu/daily-news-agent && /home/ubuntu/daily-news-agent/venv/bin/python3 -c "
 import os
 for line in open('.env'):
     line = line.strip()
@@ -88,7 +88,7 @@ venv/bin/python3 main.py >> cron.log 2>&1
 然後 `chmod +x run.sh`，crontab 只要寫：
 
 ```cron
-0 7 * * * /home/ubuntu/daily-news-agent/run.sh
+0 8 * * * /home/ubuntu/daily-news-agent/run.sh
 ```
 
 ## 5. 自訂內容
@@ -97,6 +97,7 @@ venv/bin/python3 main.py >> cron.log 2>&1
 - 想加減觀察的股市指數：改 `US_INDICES`，代碼可以到 [Stooq](https://stooq.com/q/) 或 Yahoo Finance 查
 - 想調整早報的語氣/格式：改 `summarizer.py` 裡的 `SYSTEM_PROMPT`
 - 想加減追蹤的經濟數據：改 `config.py` 的 `FRED_RELEASES`，需要同時填對 `release_id`（查詢頁面: https://fred.stlouisfed.org/releases）和該 release 對應的主要資料序列 `series_id`（在該序列頁面網址可以找到，例如 CPI 是 `CPIAUCSL`）
+- FRED 查詢失敗時只會記錄 warning，不會把錯誤訊息當成經濟數據送給 Gemini；該次早報會省略經濟數據段落。
 - **美股休市判斷已全自動化**：`sources.py` 的 `is_us_market_likely_closed()` 改用 [pandas_market_calendars](https://github.com/rsheftel/pandas_market_calendars) 套件，內建 NYSE 官方行事曆規則（含耶穌受難日這種要套復活節公式計算的浮動假日），完全離線計算、不需要 API Key，也不用像之前那樣每年手動維護假日清單。
 
 ## 6. 推播行為說明（v2 更新）

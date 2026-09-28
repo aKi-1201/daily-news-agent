@@ -48,5 +48,8 @@ env/
 .coverage
 htmlcov/
 
+# 執行記錄
+*.log
+
 # IDE 擴展
 *.code-workspace
