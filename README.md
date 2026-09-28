@@ -6,7 +6,7 @@
 
 ```
 main.py
-├─ sources.py      抓 RSS 新聞、Yahoo Finance 指數、FRED 經濟數據（純資料，不摘要）
+├─ sources.py      抓 RSS 新聞（標題＋摘要）、Yahoo Finance 指數、FRED 經濟數據（純資料，不摘要）
 ├─ summarizer.py   把上面抓到的原始資料丟給 Gemini API，整理成早報文字
 ├─ notifier.py     用 LINE Messaging API 把早報推播給你
 └─ config.py       所有可調整的設定（金鑰從 .env / 環境變數讀取）
@@ -59,7 +59,7 @@ venv/bin/python3 main.py
 
 ## 5. 自訂內容
 
-- 想加減新聞來源：改 `config.py` 的 `RSS_FEEDS`（任何提供 RSS 的媒體都可以加，注意各家版權聲明多半僅限個人非商業使用）
+- 想加減新聞來源：改 `config.py` 的 `RSS_FEEDS`；每則新聞附給 Gemini 的摘要長度由 `SUMMARY_CHARS` 控制（任何提供 RSS 的媒體都可以加，注意各家版權聲明多半僅限個人非商業使用）
 - 想加減觀察的股市指數：改 `US_INDICES`，代碼到 [Yahoo Finance](https://finance.yahoo.com/) 查（例如 S&P 500 是 `^GSPC`）
 - 想調整早報的語氣/格式：改 `summarizer.py` 裡的 `SYSTEM_PROMPT`
 - 想加減追蹤的經濟數據：改 `config.py` 的 `FRED_RELEASES`，需要同時填對 `release_id`（查詢頁面: https://fred.stlouisfed.org/releases）和該 release 對應的主要資料序列 `series_id`（在該序列頁面網址可以找到，例如 CPI 是 `CPIAUCSL`）

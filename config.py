@@ -31,7 +31,8 @@ RSS_FEEDS = {
     "關鍵評論網": "https://www.thenewslens.com/feed/feedly",
     "TechNews 科技新報": "https://technews.tw/feed/",
 }
-HEADLINES_PER_SOURCE = 10  # 每個新聞來源取幾則標題餵給 LLM（8 來源 x 10 則，讓編輯室摘要有足夠素材）
+HEADLINES_PER_SOURCE = 10  # 每個新聞來源取幾則新聞餵給 LLM（8 來源 x 10 則，讓編輯室摘要有足夠素材）
+SUMMARY_CHARS = 300  # RSS 摘要（多為新聞第一段）字數上限；現有來源最長約 180 字，等於完整送出，上限只防某個 feed 塞全文
 
 # ============ 美股觀察指數（顯示名稱 -> Yahoo Finance 代碼） ============
 US_INDICES = {

@@ -39,8 +39,8 @@ def collect_raw_data() -> str:
         raw_data += f"[美股主要指數]\n{us_market}\n\n"
 
     log.info("抓取台灣新聞 RSS...")
-    tw_news = fetch_rss_headlines(config.RSS_FEEDS, config.HEADLINES_PER_SOURCE)
-    raw_data += f"[台灣新聞標題]\n{tw_news}\n"
+    tw_news = fetch_rss_headlines(config.RSS_FEEDS, config.HEADLINES_PER_SOURCE, config.SUMMARY_CHARS)
+    raw_data += f"[台灣新聞]\n{tw_news}\n"
 
     log.info("查詢今日 FRED 經濟數據是否有公布...")
     fred_today = fetch_fred_todays_releases(config.FRED_API_KEY, config.FRED_RELEASES)

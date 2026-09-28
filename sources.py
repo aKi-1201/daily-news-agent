@@ -4,7 +4,9 @@
 確保後面餵給 Gemini 的是可查證的原始資訊，避免 LLM 憑空生成數字。
 任何一個來源抓取失敗都不應讓整支程式掛掉，因此逐一包 try/except。
 """
+import html
 import logging
+import re
 from datetime import datetime, timedelta, timezone
 
 import feedparser
@@ -47,8 +49,15 @@ def is_us_market_likely_closed() -> bool:
     return len(valid_days) == 0
 
 
-def fetch_rss_headlines(feeds: dict, limit_per_source: int) -> str:
-    """抓取多個 RSS 來源的最新標題與連結。"""
+def _clean_summary(raw: str, max_chars: int) -> str:
+    """去除 HTML 標籤/實體與中央社開頭的「（中央社記者…電）」，再截取前 max_chars 字。"""
+    text = re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", raw))).strip()
+    text = re.sub(r"^（中央社[^）]*）", "", text)
+    return text[:max_chars] + "…" if len(text) > max_chars else text
+
+
+def fetch_rss_headlines(feeds: dict, limit_per_source: int, summary_chars: int) -> str:
+    """抓取多個 RSS 來源的最新標題、摘要（前 summary_chars 字）與連結。"""
     blocks = []
     for name, url in feeds.items():
         try:
@@ -57,9 +66,13 @@ def fetch_rss_headlines(feeds: dict, limit_per_source: int) -> str:
             feed = feedparser.parse(resp.content)
             lines = []
             for entry in feed.entries[:limit_per_source]:
-                title = getattr(entry, "title", "").strip()
+                lines.append(f"- {getattr(entry, 'title', '').strip()}")
+                summary = _clean_summary(getattr(entry, "summary", ""), summary_chars)
+                if summary:
+                    lines.append(f"  摘要: {summary}")
                 link = getattr(entry, "link", "").strip()
-                lines.append(f"- {title}\n  連結: {link}" if link else f"- {title}")
+                if link:
+                    lines.append(f"  連結: {link}")
             if lines:
                 blocks.append(f"【{name}】\n" + "\n".join(lines))
             else:
